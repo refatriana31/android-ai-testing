@@ -3,6 +3,8 @@ id: 06-popular-channel
 title: Popular Channel section visible on homepage when recommendation data exists
 priority: medium
 timeout_seconds: 120
+uat_id: HOME-M-006
+section: 4.2 Homepage Sections
 ---
 
 ## Setup

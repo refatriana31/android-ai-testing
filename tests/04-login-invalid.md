@@ -3,6 +3,8 @@ id: 04-login-invalid
 title: Invalid password shows a clear error on mobile
 priority: high
 timeout_seconds: 90
+uat_id: AUTH-M-002
+section: 4.1 User Authentication
 ---
 
 ## Setup

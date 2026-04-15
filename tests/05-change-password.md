@@ -3,6 +3,8 @@ id: 05-change-password
 title: Learner changes password from Account Settings (with self-revert)
 priority: high
 timeout_seconds: 240
+uat_id: AUTH-M-007
+section: 4.1 User Authentication
 ---
 
 ## Setup

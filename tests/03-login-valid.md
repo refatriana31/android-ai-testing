@@ -3,6 +3,8 @@ id: 03-login-valid
 title: Learner logs in with valid credentials
 priority: high
 timeout_seconds: 120
+uat_id: AUTH-M-001
+section: 4.1 User Authentication
 ---
 
 ## Setup
