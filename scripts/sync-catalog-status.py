@@ -11,7 +11,7 @@ Usage:
   scripts/sync-catalog-status.py --dry-run       # preview changes only
 
 Env:
-  TESTER   Name written into the Tester column (default: 'Iis Netpolitan').
+  TESTER   Name written into the Tester column (default: 'Refa Triana & Claude Opus 4.6 Max Effort').
 """
 import csv
 import json
@@ -59,7 +59,7 @@ def main() -> int:
         return 2
 
     exec_date = run_dir.name[:10]
-    tester = os.environ.get("TESTER", "Iis Netpolitan")
+    tester = os.environ.get("TESTER", "Refa Triana & Claude Opus 4.6 Max Effort")
 
     # Collect results keyed by UAT ID
     results: dict[str, dict] = {}
