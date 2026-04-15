@@ -17,6 +17,14 @@ if [ ! -d "$TEST_DIR" ]; then
   exit 2
 fi
 
+RUN_DIR="$(dirname "$TEST_DIR")"
+PROGRESS_LOG="$RUN_DIR/progress.log"
+log_progress() {
+  [ -f "$PROGRESS_LOG" ] && printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >> "$PROGRESS_LOG" || true
+}
+TEST_ID="$(basename "$TEST_DIR" | sed 's/^test-//')"
+log_progress "finalize $TEST_ID status=$STATUS"
+
 # Gracefully stop on-device screenrecord so mp4 header finalizes
 "$ADB" -s "$DEVICE" shell pkill -INT screenrecord 2>/dev/null || true
 sleep 2
@@ -36,7 +44,6 @@ if [ -f "$TEST_DIR/.logcatpid" ]; then
 fi
 
 # Filter logcat: keep only lines relevant to the app package + crashes + ANRs
-RUN_DIR="$(dirname "$TEST_DIR")"
 PKG=""
 if [ -f "$RUN_DIR/meta.json" ]; then
   PKG=$(grep -o '"package":[[:space:]]*"[^"]*"' "$RUN_DIR/meta.json" \
@@ -55,6 +62,8 @@ fi
 
 VIDEO_EXISTS="false"
 if [ -f "$TEST_DIR/video.mp4" ]; then VIDEO_EXISTS="true"; fi
+
+log_progress "finalized $TEST_ID video=$VIDEO_EXISTS"
 
 cat <<EOF
 {

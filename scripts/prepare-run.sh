@@ -31,6 +31,20 @@ fi
 TEST_DIR="$RUN_DIR/test-$TEST_ID"
 mkdir -p "$TEST_DIR"
 
+# Maintain a stable `runs/latest.log` → current run's progress.log
+# so the user can `tail -F runs/latest.log` from another terminal.
+RUNS_ROOT="$(dirname "$RUN_DIR")"
+PROGRESS_LOG="$RUN_DIR/progress.log"
+touch "$PROGRESS_LOG"
+# replace the latest.log symlink (best-effort; fall back to copy if symlinks fail)
+ln -sfn "$PROGRESS_LOG" "$RUNS_ROOT/latest.log" 2>/dev/null || true
+
+log_progress() {
+  printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >> "$PROGRESS_LOG"
+}
+
+log_progress "prepare-run test-id=$TEST_ID"
+
 # Device reachability check
 if ! "$ADB" -s "$DEVICE" shell echo ok >/dev/null 2>&1; then
   echo "ERROR: device $DEVICE not reachable via adb" >&2
@@ -101,6 +115,8 @@ sleep 0.3
 nohup "$ADB" -s "$DEVICE" logcat -v time > "$TEST_DIR/logcat.raw.txt" 2>/dev/null &
 LOGCAT_PID=$!
 echo $LOGCAT_PID > "$TEST_DIR/.logcatpid"
+
+log_progress "prepared test-dir=$TEST_DIR logcat_pid=$LOGCAT_PID"
 
 cat <<EOF
 {

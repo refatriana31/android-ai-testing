@@ -61,7 +61,7 @@ const tests = testDirs.map((tdir) => {
   return { ...data, video, logcat, dirName };
 });
 
-const counts = { passed: 0, failed: 0, error: 0, unknown: 0 };
+const counts = { passed: 0, failed: 0, error: 0, skipped: 0, unknown: 0 };
 for (const t of tests) counts[t.status] = (counts[t.status] || 0) + 1;
 const total = tests.length;
 const totalMs = tests.reduce((a, t) => a + (t.duration_ms || 0), 0);
@@ -181,6 +181,7 @@ const html = `<!doctype html>
   .badge.passed { background: rgba(63,185,80,0.2); color: var(--pass); }
   .badge.failed { background: rgba(248,81,73,0.2); color: var(--fail); }
   .badge.error { background: rgba(248,81,73,0.3); color: var(--fail); }
+  .badge.skipped { background: rgba(88,166,255,0.18); color: var(--accent); }
   .badge.unknown { background: rgba(210,153,34,0.2); color: var(--warn); }
   details { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
             margin-bottom: 14px; overflow: hidden; }
@@ -244,6 +245,10 @@ const html = `<!doctype html>
     <div class="card">
       <div class="info-label">Failed</div>
       <div class="big fail-color">${(counts.failed || 0) + (counts.error || 0)}</div>
+    </div>
+    <div class="card">
+      <div class="info-label">Skipped</div>
+      <div class="big" style="color: var(--accent)">${counts.skipped || 0}</div>
     </div>
     <div class="card">
       <div class="info-label">Duration</div>

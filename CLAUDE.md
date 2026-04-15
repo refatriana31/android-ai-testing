@@ -138,11 +138,26 @@ Write exactly this shape to `"$TEST_DIR"/steps.json`:
 }
 ```
 
-- `status` values: `"passed"`, `"failed"`, `"error"`.
+- `status` values: `"passed"`, `"failed"`, `"error"`, `"skipped"`.
+- Use `"skipped"` when a scenario cannot be verified because a **data precondition**
+  is not met (no events, no assignments, no unfinished courses to resume, etc.).
+  Put the reason in top-level `error`, e.g. `"skipped: learner has no recent activity"`.
+  Skipped is NOT pass, NOT fail — it means the test is unverifiable right now.
+- Use `"failed"` when the feature is present but behaves incorrectly or an assertion
+  fails. Use `"error"` when the test could not run due to infra (crash, malformed
+  scenario, tool timeout).
 - `error` is a short human-readable message when `status != "passed"`.
 - Never emit relative paths for screenshots outside the test dir.
 - When a step used vision fallback, set
   `"note": "vision fallback: <short reason>"`.
+
+### Retry on failure (batch runs only)
+
+When running a batch, for any scenario that ends `failed` or `error`, retry it
+ONCE. If the retry passes, keep the `passed` result and add a step note
+`"flaky: passed on retry"`. If the retry also fails, keep the failure and add
+`"retry confirmed failure"`. Don't retry `skipped` — the data-precondition
+reason won't disappear on a second run.
 
 ### Step 5 — Finalize the test
 
