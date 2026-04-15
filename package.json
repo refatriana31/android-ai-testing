@@ -1,0 +1,9 @@
+{
+  "name": "android-ai-testing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "report": "node scripts/generate-report.mjs"
+  }
+}

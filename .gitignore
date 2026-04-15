@@ -1,0 +1,34 @@
+# === Test run artifacts (generated, large) ===
+runs/
+
+# === APK binary (too large for Git) ===
+*.apk
+
+# === Node.js ===
+node_modules/
+package-lock.json
+
+# === OS generated files ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === Logs ===
+*.log
+npm-debug.log*
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === Environment ===
+.env
+.env.local
+.env.*.local
