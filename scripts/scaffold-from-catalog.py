@@ -30,7 +30,7 @@ def existing_covered(tests_dir: Path) -> set[str]:
 
 def next_file_number(tests_dir: Path) -> int:
     nums = []
-    for p in tests_dir.glob("[0-9][0-9]-*.md"):
+    for p in tests_dir.glob("*.md"):
         m = re.match(r"(\d+)-", p.name)
         if m:
             nums.append(int(m.group(1)))
