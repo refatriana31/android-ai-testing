@@ -57,15 +57,30 @@ for rd in sorted(runs_dir.iterdir()):
         video_path = td / "video.mp4"
         has_video = video_path.is_file() and video_path.stat().st_size > 0
         screenshots = sorted(td.glob("step-*.png"))
-        # Copy screenshots
-        ss_paths = []
+        # Copy screenshots + collect step descriptions
+        ss_items = []  # list of {path, desc, note}
+        steps_data = data.get("steps", [])
         if screenshots:
             ss_dir = root / "dashboard" / "screenshots" / uat
             ss_dir.mkdir(parents=True, exist_ok=True)
+            # Build filename→step mapping
+            step_map = {}
+            for step in steps_data:
+                sfile = step.get("screenshot")
+                if sfile:
+                    step_map[sfile] = {
+                        "desc": step.get("description", ""),
+                        "note": step.get("note", ""),
+                    }
             for sp in screenshots:
                 dst = ss_dir / sp.name
                 if not dst.exists(): shutil.copy2(sp, dst)
-                ss_paths.append(f"screenshots/{uat}/{sp.name}")
+                info = step_map.get(sp.name, {})
+                ss_items.append({
+                    "path": f"screenshots/{uat}/{sp.name}",
+                    "desc": info.get("desc", sp.name),
+                    "note": info.get("note", ""),
+                })
         latest[uat] = {
             "status": data["status"],
             "error": data.get("error"),
@@ -74,7 +89,7 @@ for rd in sorted(runs_dir.iterdir()):
             "test": tid,
             "drive_id": drive_map.get(uat),
             "video_local": f"../runs/{rd.name}/test-{tid}/video.mp4" if has_video and uat not in drive_map else None,
-            "screenshots": ss_paths,
+            "screenshots": ss_items,
         }
 
 # Merge
@@ -85,7 +100,7 @@ for r in catalog:
         r["_err"] = latest[uat].get("error") or ""
         r["_drive"] = latest[uat].get("drive_id")
         r["_vid_local"] = latest[uat].get("video_local")
-        r["_ss"] = latest[uat].get("screenshots", [])
+        r["_ss"] = latest[uat].get("screenshots", [])  # list of {path, desc, note}
     else:
         r["_st"] = "not_started"
         r["_err"] = ""
@@ -184,11 +199,12 @@ for i, r in enumerate(catalog):
         vid = f'<button class="btn-play btn-local" onclick="openLocalModal(\'{r["_vid_local"]}\',\'{uat}\')">&#9654;</button>'
     else:
         vid = '<span class="dim">—</span>'
-    # Screenshot cell
+    # Screenshot cell — button that opens gallery modal
     if r["_ss"]:
-        thumbs = "".join(f'<a href="{s}" target="_blank"><img src="{s}" class="thumb" loading="lazy"></a>' for s in r["_ss"][:3])
-        extra = f'<span class="dim">+{len(r["_ss"])-3}</span>' if len(r["_ss"]) > 3 else ""
-        ss = f'<div class="thumb-row">{thumbs}{extra}</div>'
+        gallery_json = json.dumps(r["_ss"], ensure_ascii=False).replace("'", "&#39;").replace('"', "&quot;")
+        ss_count = len(r["_ss"])
+        ss = f'<button class="btn-ss" onclick="openGallery(&quot;{uat}&quot;)">&#128247; {ss_count}</button>'
+        ss += f'<script>window._gallery=window._gallery||{{}};window._gallery["{uat}"]={json.dumps(r["_ss"], ensure_ascii=False)};</script>'
     else:
         ss = '<span class="dim">—</span>'
     search_data = f"{uat} {r['Scenario']} {r['Section']} {st}".lower()
@@ -276,12 +292,10 @@ html = f'''<!DOCTYPE html>
   .priority-badge.high {{ background:rgba(239,68,68,.15); color:var(--red); }}
   .priority-badge.medium {{ background:rgba(234,179,8,.15); color:var(--yellow); }}
   .priority-badge.low {{ background:rgba(34,197,94,.15); color:var(--green); }}
-  .btn-play {{ background:var(--blue); color:#fff; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; font-weight:600; }}
-  .btn-play:hover {{ opacity:.85; }}
+  .btn-play,.btn-ss {{ background:var(--blue); color:#fff; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; font-weight:600; white-space:nowrap; }}
+  .btn-play:hover,.btn-ss:hover {{ opacity:.85; }}
   .btn-local {{ background:var(--purple); }}
-  .thumb-row {{ display:flex; gap:3px; flex-wrap:wrap; }}
-  .thumb {{ width:40px; height:72px; object-fit:cover; border-radius:3px; border:1px solid var(--border); cursor:pointer; }}
-  .thumb:hover {{ border-color:var(--blue); }}
+  .btn-ss {{ background:var(--green); }}
   .dim {{ color:var(--text2); font-size:12px; }}
   .notes {{ max-width:260px; font-size:11px; color:var(--text2); line-height:1.4; }}
   .modal-overlay {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.85); z-index:1000; align-items:center; justify-content:center; }}
@@ -291,6 +305,27 @@ html = f'''<!DOCTYPE html>
   .modal-close {{ position:absolute; top:8px; right:12px; background:none; border:none; color:#fff; font-size:24px; cursor:pointer; }}
   .modal-close:hover {{ color:var(--red); }}
   #modalContent iframe, #modalContent video {{ width:100%; border-radius:8px; }}
+  /* Gallery modal */
+  .gallery-overlay {{ display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.92); z-index:1001; align-items:center; justify-content:center; flex-direction:column; }}
+  .gallery-overlay.active {{ display:flex; }}
+  .gallery-box {{ position:relative; max-width:420px; width:92%; }}
+  .gallery-close {{ position:absolute; top:-36px; right:0; background:none; border:none; color:#fff; font-size:28px; cursor:pointer; z-index:2; }}
+  .gallery-close:hover {{ color:var(--red); }}
+  .gallery-title {{ color:#fff; font-size:15px; font-weight:600; text-align:center; margin-bottom:10px; }}
+  .gallery-img-wrap {{ position:relative; background:#000; border-radius:10px; overflow:hidden; min-height:300px; display:flex; align-items:center; justify-content:center; }}
+  .gallery-img-wrap img {{ max-width:100%; max-height:70vh; object-fit:contain; display:block; margin:0 auto; }}
+  .gallery-nav {{ position:absolute; top:50%; transform:translateY(-50%); background:rgba(0,0,0,.6); color:#fff; border:none; font-size:28px; padding:8px 14px; cursor:pointer; border-radius:8px; z-index:2; }}
+  .gallery-nav:hover {{ background:rgba(255,255,255,.2); }}
+  .gallery-nav.prev {{ left:8px; }}
+  .gallery-nav.next {{ right:8px; }}
+  .gallery-desc {{ background:var(--surface); border-radius:0 0 10px 10px; padding:14px 16px; margin-top:-4px; }}
+  .gallery-desc .gd-step {{ color:var(--blue); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }}
+  .gallery-desc .gd-text {{ color:var(--text); font-size:13px; margin-top:4px; line-height:1.5; }}
+  .gallery-desc .gd-note {{ color:var(--text2); font-size:12px; margin-top:6px; font-style:italic; }}
+  .gallery-counter {{ color:var(--text2); font-size:12px; text-align:center; margin-top:10px; }}
+  .gallery-dots {{ display:flex; gap:6px; justify-content:center; margin-top:8px; }}
+  .gallery-dot {{ width:8px; height:8px; border-radius:50%; background:var(--surface2); cursor:pointer; }}
+  .gallery-dot.active {{ background:var(--blue); }}
   .footer {{ text-align:center; padding:32px 0 16px; color:var(--text2); font-size:12px; border-top:1px solid var(--border); margin-top:40px; }}
   @media (max-width:600px) {{ .summary-grid {{ grid-template-columns:repeat(2,1fr); }} .section-grid,.blocker-grid {{ grid-template-columns:1fr; }} }}
   @media print {{ .btn-play,.modal-overlay {{ display:none!important; }} body {{ font-size:11px; background:#fff; color:#000; }} .summary-card,.section-card,.blocker-card,.finding {{ border-color:#ddd; background:#f9f9f9; }} }}
@@ -371,6 +406,7 @@ html = f'''<!DOCTYPE html>
   </div>
 </div>
 
+<!-- Video Modal -->
 <div class="modal-overlay" id="videoModal">
   <div class="modal-box">
     <button class="modal-close" onclick="closeModal()">&times;</button>
@@ -379,12 +415,72 @@ html = f'''<!DOCTYPE html>
   </div>
 </div>
 
+<!-- Gallery Modal -->
+<div class="gallery-overlay" id="galleryModal">
+  <div class="gallery-box">
+    <button class="gallery-close" onclick="closeGallery()">&times;</button>
+    <div class="gallery-title" id="galleryTitle"></div>
+    <div class="gallery-img-wrap">
+      <button class="gallery-nav prev" onclick="galleryNav(-1)">&#8249;</button>
+      <img id="galleryImg" src="" alt="">
+      <button class="gallery-nav next" onclick="galleryNav(1)">&#8250;</button>
+    </div>
+    <div class="gallery-desc">
+      <div class="gd-step" id="galleryStep"></div>
+      <div class="gd-text" id="galleryDesc"></div>
+      <div class="gd-note" id="galleryNote"></div>
+    </div>
+    <div class="gallery-counter" id="galleryCounter"></div>
+    <div class="gallery-dots" id="galleryDots"></div>
+  </div>
+</div>
+
 <script>
+// Video modals
 function openModal(fileId,title){{var o=document.getElementById('videoModal'),c=document.getElementById('modalContent'),t=document.getElementById('modalTitle');t.textContent=title;c.innerHTML='<iframe src="https://drive.google.com/file/d/'+fileId+'/preview" width="100%" height="480" frameborder="0" allow="autoplay" allowfullscreen></iframe>';o.classList.add('active');}}
 function openLocalModal(src,title){{var o=document.getElementById('videoModal'),c=document.getElementById('modalContent'),t=document.getElementById('modalTitle');t.textContent=title;c.innerHTML='<video controls autoplay width="100%"><source src="'+src+'" type="video/mp4"></video>';o.classList.add('active');}}
-function closeModal(){{var o=document.getElementById('videoModal');document.getElementById('modalContent').innerHTML='';o.classList.remove('active');}}
+function closeModal(){{document.getElementById('modalContent').innerHTML='';document.getElementById('videoModal').classList.remove('active');}}
 document.getElementById('videoModal').addEventListener('click',function(e){{if(e.target===this)closeModal();}});
-document.addEventListener('keydown',function(e){{if(e.key==='Escape')closeModal();}});
+
+// Gallery
+var _gIdx=0, _gItems=[];
+function openGallery(uat){{
+  _gItems=window._gallery[uat]||[];
+  if(!_gItems.length)return;
+  _gIdx=0;
+  document.getElementById('galleryTitle').textContent=uat;
+  renderGallerySlide();
+  renderGalleryDots();
+  document.getElementById('galleryModal').classList.add('active');
+}}
+function renderGallerySlide(){{
+  var item=_gItems[_gIdx];
+  document.getElementById('galleryImg').src=item.path;
+  document.getElementById('galleryStep').textContent='Step '+ (_gIdx+1) +' / '+ _gItems.length;
+  document.getElementById('galleryDesc').textContent=item.desc||'';
+  document.getElementById('galleryNote').textContent=item.note?'💡 '+item.note:'';
+  document.getElementById('galleryCounter').textContent=(_gIdx+1)+' dari '+_gItems.length+' screenshot';
+  var dots=document.querySelectorAll('.gallery-dot');
+  dots.forEach(function(d,i){{d.classList.toggle('active',i===_gIdx);}});
+}}
+function renderGalleryDots(){{
+  var html='';
+  for(var i=0;i<_gItems.length;i++)html+='<div class="gallery-dot'+(i===0?' active':'')+'" onclick="galleryGo('+i+')"></div>';
+  document.getElementById('galleryDots').innerHTML=html;
+}}
+function galleryNav(dir){{_gIdx=(_gIdx+dir+_gItems.length)%_gItems.length;renderGallerySlide();}}
+function galleryGo(i){{_gIdx=i;renderGallerySlide();}}
+function closeGallery(){{document.getElementById('galleryModal').classList.remove('active');}}
+document.getElementById('galleryModal').addEventListener('click',function(e){{if(e.target===this)closeGallery();}});
+
+// Keyboard
+document.addEventListener('keydown',function(e){{
+  if(e.key==='Escape'){{closeModal();closeGallery();}}
+  if(document.getElementById('galleryModal').classList.contains('active')){{
+    if(e.key==='ArrowRight'||e.key==='ArrowDown')galleryNav(1);
+    if(e.key==='ArrowLeft'||e.key==='ArrowUp')galleryNav(-1);
+  }}
+}});
 (function(){{
   var tabs=document.querySelectorAll('.tab-btn'),rows=document.querySelectorAll('.result-row'),input=document.getElementById('searchInput');
   function apply(){{var f=document.querySelector('.tab-btn.active').dataset.filter,s=input.value.toLowerCase();rows.forEach(function(r){{var ms=f==='all'||r.dataset.status===f,mt=!s||r.dataset.search.includes(s);r.style.display=(ms&&mt)?'':'none';}});}}
